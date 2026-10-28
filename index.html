@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101827"><title>SNESブラウザプレイヤー</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101827;color:#f3f6fb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:850px;margin:auto;padding:24px 16px 40px}h1{font-size:clamp(1.6rem,5vw,2.2rem)}p,li{line-height:1.6;color:#b7c3d4}.card{background:#1b2638;border:1px solid #33445c;border-radius:18px;padding:18px;margin-top:18px}label{display:block;text-align:center;border:2px dashed #6b829f;border-radius:14px;padding:24px 12px;background:#142033;color:#7dd3fc;font-weight:bold;cursor:pointer}input{max-width:100%;margin-top:12px}button{background:#7dd3fc;color:#082032;border:0;border-radius:12px;padding:13px 18px;font-size:1rem;font-weight:750;width:100%;margin-top:12px}button:disabled{opacity:.45}#status{margin-top:12px;padding:12px;border-radius:10px;background:#101827;line-height:1.5}#game{width:100%;min-height:250px;margin-top:16px;background:#05080d;border-radius:12px;overflow:hidden}.small{font-size:.9rem}
+</style></head><body><main>
+<h1>🎮 SNESブラウザプレイヤー</h1>
+<p>自分で用意したスーパーファミコン用ゲームファイルを選んで、ブラウザで起動を試せます。アプリのインストールは不要です。</p>
+<section class="card">
+<label for="rom">📂 ゲームファイルを選択<br><span class="small">.sfc / .smc</span></label>
+<input id="rom" type="file" accept=".sfc,.smc,.fig,.bin,application/octet-stream">
+<div id="filename" class="small">まだファイルが選択されていません。</div>
+<button id="start" disabled>ゲームを読み込む</button><div id="status" role="status">まずゲームファイルを選択してください。</div>
+</section>
+<section class="card"><h2 class="small">ゲーム画面</h2><p class="small">読み込み後、ここにゲーム画面と操作ボタンが表示されます。</p><div id="game"></div></section>
+<section class="card"><h2 class="small">注意</h2><ul><li>主に .sfc / .smc 形式に対応します。</li><li>エミュレーター本体をインターネットから読み込むため、通信が必要です。</li><li>このページにはゲームROMは含まれていません。利用する権利のあるファイルを選んでください。</li><li>iPhoneのSafariでローカルHTMLを開いた場合、ブラウザの制限で動かないことがあります。</li></ul></section>
+</main>
+<script>
+(() => {
+const picker=document.getElementById('rom'),start=document.getElementById('start'),filename=document.getElementById('filename'),status=document.getElementById('status'),game=document.getElementById('game');
+let objectUrl=null;
+picker.addEventListener('change',()=>{const f=picker.files&&picker.files[0];start.disabled=!f;filename.textContent=f?`選択中: ${f.name} (${(f.size/1048576).toFixed(2)} MB)`:'まだファイルが選択されていません。';status.textContent=f?'ファイルを選択しました。「ゲームを読み込む」を押してください。':'まずゲームファイルを選択してください。';});
+start.addEventListener('click',()=>{
+const f=picker.files&&picker.files[0];if(!f)return;
+const ext=f.name.split('.').pop().toLowerCase();if(!['sfc','smc','fig','bin'].includes(ext)){status.textContent='.sfc または .smc ファイルを選んでください。';return;}
+start.disabled=true;status.textContent='エミュレーターを読み込んでいます。少し待ってください…';game.innerHTML='';
+if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(f);
+window.EJS_player='#game';window.EJS_core='snes';window.EJS_gameUrl=objectUrl;window.EJS_pathtodata='https://cdn.emulatorjs.org/stable/data/';window.EJS_startOnLoaded=true;window.EJS_gameName=f.name.replace(/\.[^.]+$/,'');
+window.EJS_ready=()=>{status.textContent='エミュレーターの準備ができました。画面内の操作ボタンで遊んでください。';start.disabled=false;};
+window.EJS_onGameStart=()=>{status.textContent='ゲームを起動しました。';start.disabled=false;};
+const s=document.createElement('script');s.src=window.EJS_pathtodata+'loader.js';s.onload=()=>{status.textContent='エミュレーターを起動中です。数十秒かかることがあります。';start.disabled=false;};s.onerror=()=>{status.textContent='エミュレーター本体を読み込めませんでした。通信を確認してください。';start.disabled=false;};document.body.appendChild(s);
+});
+})();
+</script></body></html>
