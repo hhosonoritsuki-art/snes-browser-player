@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<title>レトロゲームブラウザプレイヤー</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101827;color:#f3f6fb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:850px;margin:auto;padding:24px 16px 40px}
+h1{font-size:clamp(1.6rem,5vw,2.2rem);margin-bottom:8px}
+p,li{line-height:1.6;color:#b7c3d4}
+.card{background:#1b2638;border:1px solid #33445c;border-radius:18px;padding:18px;margin-top:18px}
+.platforms{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.platform{background:#142033;color:#dbeafe;border:2px solid #40536d;border-radius:14px;padding:15px 10px;font-weight:750;cursor:pointer}
+.platform[aria-pressed="true"]{border-color:#7dd3fc;background:#17334a;color:#7dd3fc}
+.platform span{display:block;font-size:.82rem;font-weight:500;color:#b7c3d4;margin-top:5px}
+label{display:block;text-align:center;border:2px dashed #6b829f;border-radius:14px;padding:24px 12px;background:#142033;color:#7dd3fc;font-weight:bold;cursor:pointer}
+input{max-width:100%;margin-top:12px}
+button.action{background:#7dd3fc;color:#082032;border:0;border-radius:12px;padding:13px 18px;font-size:1rem;font-weight:750;width:100%;margin-top:12px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+#status{margin-top:12px;padding:12px;border-radius:10px;background:#101827;line-height:1.5;min-height:48px}
+#game{width:100%;min-height:250px;margin-top:16px;background:#05080d;border-radius:12px;overflow:hidden}
+.small{font-size:.9rem}
+.hint{font-size:.88rem;color:#9eacc0}
+@media(max-width:420px){main{padding:18px 12px 30px}.card{padding:14px}.platform{font-size:.95rem}}
+</style>
+</head>
+<body>
+<main>
+<h1>🎮 レトロゲームブラウザプレイヤー</h1>
+<p>スーパーファミコンとゲームボーイカラーのゲームを、ブラウザ上で起動できます。</p>
+
+<section class="card">
+<h2 class="small">① ゲーム機を選択</h2>
+<div class="platforms" role="group" aria-label="ゲーム機選択">
+<button class="platform" id="snesMode" type="button" aria-pressed="true">スーパーファミコン<span>SNES / SFC</span></button>
+<button class="platform" id="gbMode" type="button" aria-pressed="false">ゲームボーイ<span>GB / GBC</span></button>
+</div>
+</section>
+
+<section class="card">
+<h2 class="small">② ゲームファイルを選択</h2>
+<label for="rom">📂 ファイルを選択<br><span class="small" id="formats">.sfc / .smc / .fig / .bin</span></label>
+<input id="rom" type="file" accept=".sfc,.smc,.fig,.bin,application/octet-stream">
+<div id="filename" class="small">まだファイルが選択されていません。</div>
+<button class="action" id="start" disabled>ゲームを読み込む</button>
+<div id="status" role="status">ゲーム機を選び、ゲームファイルを選択してください。</div>
+</section>
+
+<section class="card">
+<h2 class="small">③ ゲーム画面</h2>
+<p class="small">読み込み後、ここにゲーム画面と操作ボタンが表示されます。</p>
+<div id="game"></div>
+</section>
+
+<section class="card">
+<h2 class="small">注意・対応形式</h2>
+<ul>
+<li>スーパーファミコン：.sfc / .smc / .fig / .bin</li>
+<li>ゲームボーイ／ゲームボーイカラー：.gb / .gbc</li>
+<li>エミュレーター本体の読み込みには通信が必要です。</li>
+<li>ゲームROMは付属していません。利用する権利のあるファイルを選んでください。</li>
+<li>ゲームを切り替えるときはページを再読み込みしてください。</li>
+</ul>
+<button class="action" id="reload" type="button">ページを再読み込み</button>
+<p class="hint">iPhone・iPadではSafariでファイルを選択してください。</p>
+</section>
+</main>
+
+<script>
+(() => {
+const picker = document.getElementById('rom');
+const start = document.getElementById('start');
+const filename = document.getElementById('filename');
+const status = document.getElementById('status');
+const game = document.getElementById('game');
+const formats = document.getElementById('formats');
+const snesMode = document.getElementById('snesMode');
+const gbMode = document.getElementById('gbMode');
+const reload = document.getElementById('reload');
+
+let system = 'snes';
+let objectUrl = null;
+let emulatorStarted = false;
+
+const settings = {
+snes: {
+core: 'snes',
+extensions: ['sfc','smc','fig','bin'],
+accept: '.sfc,.smc,.fig,.bin,application/octet-stream',
+label: '.sfc / .smc / .fig / .bin',
+title: 'スーパーファミコン'
+},
+gb: {
+core: 'gb',
+extensions: ['gb','gbc'],
+accept: '.gb,.gbc,application/octet-stream',
+label: '.gb / .gbc',
+title: 'ゲームボーイ／ゲームボーイカラー'
+}
+};
+
+function chooseSystem(next) {
+if (emulatorStarted) {
+status.textContent = '起動後に機種を変更するには、ページを再読み込みしてください。';
+return;
+}
+system = next;
+snesMode.setAttribute('aria-pressed', String(system === 'snes'));
+gbMode.setAttribute('aria-pressed', String(system === 'gb'));
+picker.accept = settings[system].accept;
+formats.textContent = settings[system].label;
+picker.value = '';
+start.disabled = true;
+filename.textContent = 'まだファイルが選択されていません。';
+status.textContent = settings[system].title + 'を選択しました。ゲームファイルを選んでください。';
+}
+
+snesMode.addEventListener('click', () => chooseSystem('snes'));
+gbMode.addEventListener('click', () => chooseSystem('gb'));
+reload.addEventListener('click', () => location.reload());
+
+picker.addEventListener('change', () => {
+const file = picker.files && picker.files[0];
+start.disabled = !file;
+filename.textContent = file
+? `選択中: ${file.name} (${(file.size / 1048576).toFixed(2)} MB)`
+: 'まだファイルが選択されていません。';
+status.textContent = file
+? 'ファイルを選択しました。「ゲームを読み込む」を押してください。'
+: 'ゲームファイルを選択してください。';
+});
+
+start.addEventListener('click', () => {
+const file = picker.files && picker.files[0];
+if (!file || emulatorStarted) return;
+
+const extension = file.name.split('.').pop().toLowerCase();
+const config = settings[system];
+
+if (!config.extensions.includes(extension)) {
+status.textContent = config.title + 'に対応したファイル（' + config.label + '）を選んでください。';
+return;
+}
+
+emulatorStarted = true;
+start.disabled = true;
+snesMode.disabled = true;
+gbMode.disabled = true;
+status.textContent = 'エミュレーターを読み込んでいます。少し待ってください…';
+game.innerHTML = '';
+
+if (objectUrl) URL.revokeObjectURL(objectUrl);
+objectUrl = URL.createObjectURL(file);
+
+window.EJS_player = '#game';
+window.EJS_core = config.core;
+window.EJS_gameUrl = objectUrl;
+window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+window.EJS_startOnLoaded = true;
+window.EJS_gameName = file.name.replace(/\.[^.]+$/, '');
+
+window.EJS_ready = () => {
+status.textContent = 'エミュレーターの準備ができました。画面内の操作ボタンで遊んでください。';
+};
+
+window.EJS_onGameStart = () => {
+status.textContent = 'ゲームを起動しました。';
+};
+
+const script = document.createElement('script');
+script.src = window.EJS_pathtodata + 'loader.js';
+
+script.onload = () => {
+status.textContent = 'エミュレーターを起動中です。数十秒かかることがあります…';
+};
+
+script.onerror = () => {
+status.textContent = 'エミュレーター本体を読み込めませんでした。通信を確認して、ページを再読み込みしてください。';
+emulatorStarted = false;
+start.disabled = false;
+snesMode.disabled = false;
+gbMode.disabled = false;
+};
+
+document.body.appendChild(script);
+});
+
+window.addEventListener('beforeunload', () => {
+if (objectUrl) URL.revokeObjectURL(objectUrl);
+});
+})();
+</script>
+</body>
+</html>
